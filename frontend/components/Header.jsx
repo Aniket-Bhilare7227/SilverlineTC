@@ -168,7 +168,7 @@ const Header = () => {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">(941) 404-6255</p>
-              <p className="text-xs text-muted-foreground">Call now</p>
+              <p className="text-xs text-muted-foreground">Call now us</p>
             </div>
           </a>
 
