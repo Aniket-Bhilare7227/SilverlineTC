@@ -164,7 +164,7 @@ const Footer = () => {
               <Image src={Logo} alt="Company Logo" className="w-full h-auto" />
             </div>
             <p className="text-primary-foreground/80 leading-relaxed text-lg md:text-xl">
-              Professional travel companions providing safe, compassionate support.
+              Professional travel companions providing safe, thank you.
             </p>
 
             {/* Social Links */}
