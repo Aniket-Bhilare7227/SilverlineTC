@@ -259,7 +259,7 @@ const Footer = () => {
               © 2025 SilverlineTC. All rights reserved.
             </p>
             <p className="text-primary-foreground/60">
-              Licensed, insured, and dedicated to your safe journey.
+             Please join our community
             </p>
           </div>
         </div>
