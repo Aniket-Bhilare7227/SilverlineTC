@@ -259,7 +259,7 @@ const Footer = () => {
               © 2025 SilverlineTC. All rights reserved.
             </p>
             <p className="text-primary-foreground/60">
-             Please join our community
+             Please join our community for more imformation
             </p>
           </div>
         </div>
