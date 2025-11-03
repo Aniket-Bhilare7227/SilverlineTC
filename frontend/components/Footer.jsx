@@ -127,7 +127,7 @@ const Footer = () => {
               © 2025 SilverlineTC. Thanks Aniket.
             </p>
             <p className="text-primary-foreground/60">
-           Testing Purpose.
+           Testing Server.
             </p>
           </div>
         </div>
