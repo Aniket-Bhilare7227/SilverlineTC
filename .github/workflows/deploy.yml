@@ -1,47 +1,72 @@
-name: Deploy to EC2
+name: Deploy SilverlineTC to EC2
 
 on:
   push:
     branches:
-      - main   # 👉 जर तुझा branch वेगळा असेल तर इथे बदल
+      - main   # main branch वर push झाला की trigger होईल
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Repo checkout
+      # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2️⃣ SSH key setup
+      # Step 2: Setup SSH key and known_hosts
       - name: Setup SSH key
+        shell: bash
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 52.66.126.190 >> ~/.ssh/known_hosts
+          set -e
+          mkdir -p $HOME/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > $HOME/.ssh/deploy_key
+          chmod 600 $HOME/.ssh/deploy_key
 
-      # 3️⃣ Test SSH connection (optional but helps debugging)
+          echo "🔑 Adding EC2 host fingerprint..."
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> $HOME/.ssh/known_hosts 2>/dev/null
+
+          echo "✅ SSH key and known_hosts setup complete."
+
+      # Step 3: Test SSH connection (for debugging)
       - name: Test SSH connection
+        shell: bash
         run: |
-          echo "Testing SSH connection..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@52.66.126.190 "echo '✅ Connected to EC2 successfully'"
+          set -x
+          ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo '✅ SSH connection successful'"
 
-      # 4️⃣ Deploy code using rsync
-      - name: Deploy code to EC2
+      # Step 4: Copy project files to EC2
+      - name: Copy project files to EC2
+        shell: bash
         run: |
-          echo "🚀 Deploying files to EC2..."
+          set -x
           rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-            ./ ubuntu@52.66.126.190:/home/ubuntu/SilverlineTC
+            -e "ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
+            --exclude '.git' --exclude '.github' ./ \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_DEPLOY_PATH }}
 
-      # 5️⃣ Restart app using PM2 (if applicable)
-      - name: Restart app on EC2
+      # Step 5: SSH into EC2 and deploy Docker containers
+      - name: Deploy SilverlineTC on EC2
+        shell: bash
         run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@52.66.126.190 << 'EOF'
-            cd /home/ubuntu/SilverlineTC
-            echo "🛠️ Pulling latest code and restarting app..."
-            npm install --production
-            pm2 restart all || pm2 start npm --name "SilverlineTC" -- run start
+          ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no \
+          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
+            echo "🚀 Starting deployment on EC2..."
+            cd ${{ secrets.EC2_DEPLOY_PATH }}
+
+            echo "🧹 Cleaning up old containers..."
+            docker-compose down || true
+
+            echo "🔨 Building new containers..."
+            docker-compose build --no-cache
+
+            echo "🟢 Starting containers..."
+            docker-compose up -d
+
+            echo "🧼 Pruning unused images..."
+            docker system prune -f
+
+            echo "✅ Deployment completed successfully!"
           EOF
