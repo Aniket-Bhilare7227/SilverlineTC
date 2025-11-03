@@ -3,16 +3,18 @@ name: Zero Downtime Deploy (Docker Compose)
 on:
   push:
     branches:
-      - main
+      - main   # Trigger on push to main branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # Step 2: Setup SSH key and known_hosts
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
@@ -20,33 +22,32 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
+      # Step 3: Deploy to EC2
       - name: Deploy on EC2
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            set -e
             cd /home/ubuntu/SilverlineTC
+
             echo "🔹 Pulling latest code..."
-            sudo git pull origin main
+            sudo git fetch origin main
+            sudo git reset --hard origin/main
+
+            echo "🛑 Stopping old containers..."
+            sudo docker compose down || true
+
+            echo "🧹 Removing unused data..."
+            sudo docker system prune -af || true
 
             echo "🔹 Building new containers..."
-            sudo docker compose build
+            sudo docker compose build --no-cache
 
-            echo "🔹 Starting new containers (temporary names)..."
-            sudo docker compose -p silverlinetc_new up -d
+            echo "🚀 Starting containers..."
+            sudo docker compose up -d
 
-            echo "⏳ Waiting for new containers to start..."
-            sleep 10
+            echo "✅ Checking running containers..."
+            sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-            echo "🔹 Checking if new containers running..."
-            if sudo docker ps | grep -q silverlinetc_new; then
-              echo "✅ New containers running. Swapping..."
-              sudo docker compose -p silverlinetc down
-              sudo docker compose -p silverlinetc up -d
-              echo "🧹 Cleaning temporary containers..."
-              sudo docker compose -p silverlinetc_new down
-              sudo docker image prune -f
-            else
-              echo "❌ New containers failed. Keeping old setup."
-              sudo docker compose -p silverlinetc_new logs
-              sudo docker compose -p silverlinetc_new down
-            fi
+            echo "🎉 Deployment completed successfully!"
           EOF
+
