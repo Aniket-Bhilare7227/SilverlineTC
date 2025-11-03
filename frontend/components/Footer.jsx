@@ -124,7 +124,7 @@ const Footer = () => {
         <div className="border-t border-primary-foreground/20 pt-6">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0 text-lg md:text-xl">
             <p className="text-primary-foreground/80">
-              © 2025 SilverlineTC. Thank u.
+              © 2025 SilverlineTC. Thanks Aniket.
             </p>
             <p className="text-primary-foreground/60">
            Demopurpose
