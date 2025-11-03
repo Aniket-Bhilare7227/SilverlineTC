@@ -1,9 +1,9 @@
-name: Deploy to EC2 using Docker
+name: Zero Downtime Deploy to EC2 using Docker
 
 on:
   push:
     branches:
-      - main   # change karaycha asel tar branch name change kar
+      - main
 
 jobs:
   deploy:
@@ -20,11 +20,38 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy to EC2
+      - name: Deploy on EC2
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             cd /home/ubuntu/SilverlineTC
+            echo "🔹 Pulling latest code..."
             sudo git pull origin main
-            sudo docker compose down
-            sudo docker compose up -d --build
+
+            echo "🔹 Building new Docker image..."
+            NEW_TAG=$(date +%s)
+            sudo docker build -t silverlinetc_app:$NEW_TAG .
+
+            echo "🔹 Running new container (temporary name)..."
+            sudo docker run -d --name silverlinetc_new -p 3001:3000 silverlinetc_app:$NEW_TAG
+
+            echo "⏳ Waiting for new container to stabilize..."
+            sleep 10
+
+            echo "🔹 Health check new container..."
+            if sudo docker ps | grep -q silverlinetc_new; then
+              echo "✅ New container is healthy. Switching..."
+              sudo docker stop silverlinetc_old || true
+              sudo docker rm silverlinetc_old || true
+              sudo docker rename silverlinetc silverlinetc_old || true
+              sudo docker rename silverlinetc_new silverlinetc
+              sudo docker stop silverlinetc_old || true
+              sudo docker rm silverlinetc_old || true
+              echo "🧹 Cleaning old images..."
+              sudo docker image prune -f
+            else
+              echo "❌ New container failed. Keeping old one running."
+              sudo docker logs silverlinetc_new
+              sudo docker stop silverlinetc_new
+              sudo docker rm silverlinetc_new
+            fi
           EOF
