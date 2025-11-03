@@ -1,72 +1,30 @@
-name: Deploy SilverlineTC to EC2
+name: Deploy to EC2 using Docker
 
 on:
   push:
     branches:
-      - main   # main branch वर push झाला की trigger होईल
+      - main   # change karaycha asel tar branch name change kar
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Setup SSH key and known_hosts
-      - name: Setup SSH key
-        shell: bash
+      - name: Setup SSH
         run: |
-          set -e
-          mkdir -p $HOME/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > $HOME/.ssh/deploy_key
-          chmod 600 $HOME/.ssh/deploy_key
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-          echo "🔑 Adding EC2 host fingerprint..."
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> $HOME/.ssh/known_hosts 2>/dev/null
-
-          echo "✅ SSH key and known_hosts setup complete."
-
-      # Step 3: Test SSH connection (for debugging)
-      - name: Test SSH connection
-        shell: bash
+      - name: Deploy to EC2
         run: |
-          set -x
-          ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo '✅ SSH connection successful'"
-
-      # Step 4: Copy project files to EC2
-      - name: Copy project files to EC2
-        shell: bash
-        run: |
-          set -x
-          rsync -avz \
-            -e "ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10" \
-            --exclude '.git' --exclude '.github' ./ \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.EC2_DEPLOY_PATH }}
-
-      # Step 5: SSH into EC2 and deploy Docker containers
-      - name: Deploy SilverlineTC on EC2
-        shell: bash
-        run: |
-          ssh -i $HOME/.ssh/deploy_key -o StrictHostKeyChecking=no \
-          ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            set -e
-            echo "🚀 Starting deployment on EC2..."
-            cd ${{ secrets.EC2_DEPLOY_PATH }}
-
-            echo "🧹 Cleaning up old containers..."
-            docker-compose down || true
-
-            echo "🔨 Building new containers..."
-            docker-compose build --no-cache
-
-            echo "🟢 Starting containers..."
-            docker-compose up -d
-
-            echo "🧼 Pruning unused images..."
-            docker system prune -f
-
-            echo "✅ Deployment completed successfully!"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            cd /home/ubuntu/<your-project-folder>
+            sudo git pull origin main
+            sudo docker compose down
+            sudo docker compose up -d --build
           EOF
